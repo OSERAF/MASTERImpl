@@ -8,7 +8,7 @@ class IkanowResolver(
                       dukeConf: Configuration) extends DukeResolver(store, dukeConf) {
 
   override def compare(targetRecord:EntityRecord, candidateRecord:Record):Option[BullsEyeEntityScore] = {
-    if(targetRecord.getProperties().contains("Date") || candidateRecord.getProperties().contains("Date")) {
+    if(targetRecord.getValue("type") == "Date" || candidateRecord.getValue("type") == "Date") {
       None
     }
     else {
