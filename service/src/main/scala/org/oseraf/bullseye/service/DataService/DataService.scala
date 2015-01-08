@@ -35,7 +35,7 @@ trait DataService extends Service {
   val merger = new SimpleAddingMerger { override val store = entityStore.spliceStore }
   val splitter = new SimpleAddingSplitter { override val store = entityStore.spliceStore }
   val resolverConf: Configuration = ConfigLoader.load(conf.getConfig("duke").getString("confPath"))
-  val resolver = new DukeResolver(resolutionStore, resolverConf)
+  val resolver = new IkanowResolver(resolutionStore, resolverConf)
 
   def resolve(targetEntityId: EntityStore.ID, limit:Option[Int] = None) : Seq[BullsEyeEntityScore] =
     resolver.resolve(targetEntityId, limit)
