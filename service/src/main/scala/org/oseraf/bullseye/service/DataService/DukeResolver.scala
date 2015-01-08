@@ -68,7 +68,7 @@ class DukeResolver(
     candidates.flatMap(candidate => compare(targetRecord, candidate)).toSeq
   }
 
-  private def compare(targetRecord: EntityRecord, candidateRecord: Record): Option[BullsEyeEntityScore] = {
+  protected def compare(targetRecord: EntityRecord, candidateRecord: Record): Option[BullsEyeEntityScore] = {
     if (areEquivalent(targetRecord, candidateRecord)) {
       None
     } else {
