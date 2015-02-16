@@ -28,7 +28,7 @@ angular.module('bullseye.home', [])
         mergeModal,
         resolveModalController = function ($scope, $modalInstance, resolutions, entity) {
             $scope.resolutions = _.map(resolutions, function(resource) {
-                                     resource.entity.label = resource.entity.attrs.Name || resource.entity.attrs.name || resource.entity.attrs.displayName || resource.entity.attrs.id;
+                                     resource.entity.label = resource.entity.attrs.Name || resource.entity.attrs.name || resource.entity.attrs.actual_name || resource.entity.attrs.displayName || resource.entity.id;
                                      return resource;
                                  });
             $scope.entity = entity;
@@ -70,7 +70,7 @@ angular.module('bullseye.home', [])
         deduplicateModalController = function ($scope, $modalInstance, deduplications) {
             $scope.deduplications =  _.map(deduplications, function(resource) {
                                          _.map(resource.entities, function(entity) {
-                                             entity.label = entity.attrs.Name || entity.attrs.name || entity.attrs.displayName || entity.attrs.id;
+                                             entity.label = entity.attrs.Name || entity.attrs.name || entity.attrs.actual_name || entity.attrs.displayName || entity.id;
                                              return entity;
                                          });
                                          return resource;
@@ -241,7 +241,7 @@ angular.module('bullseye.home', [])
         splitModalController = function ($scope, $modalInstance, entity) {
             var s1 = 'split-' + new Date().getTime(),
             s2 = 'split-' + new Date().getTime() + 1;
-            entity.label = entity.entity.attrs.Name || entity.entity.attrs.name || entity.entity.attrs.displayName || entity.entity.attrs.id;
+            entity.label = entity.entity.attrs.Name || entity.entity.attrs.name || entity.entity.attrs.actual_name || entity.entity.attrs.displayName || entity.entity.attrs.id;
             $scope.entity = entity;
             $scope.splits = [
                 {
@@ -485,7 +485,7 @@ angular.module('bullseye.home', [])
             showNeighborhood: function (entityScore) {
                 EntityOps.neighborhood({eId: entityScore.entity.id}).$promise.then(function (neighborhoodGraph) {
                     neighborhoodGraph.nodes = _.map(neighborhoodGraph.nodes, function(node) {
-                                                  node.label = node.attrs.Name || node.attrs.name || node.attrs.displayName || node.attrs.id;
+                                                  node.label = node.attrs.Name || node.attrs.name || node.attrs.actual_name || node.attrs.displayName || node.attrs.id;
                                                   return node;
                                               });
                     var newHashedEntityData = {};
@@ -529,7 +529,7 @@ angular.module('bullseye.home', [])
             search: function (query, searchType, cbEarly, cbLate) {
                 return EntityOps.search({query: query, searchTypeId: searchType.id}).$promise.then(function (graph) {
                            graph.nodes = _.map(graph.nodes, function(node) {
-                                             node.entity.label = node.entity.attrs.Name || node.entity.attrs.name || node.entity.attrs.displayName || node.entity.attrs.id;
+                                             node.entity.label = node.entity.attrs.Name || node.entity.attrs.name || node.entity.attrs.actual_name || node.entity.attrs.displayName || node.entity.attrs.id;
                                              return node;
                                          });
                     cbEarly && cbEarly();
@@ -622,7 +622,7 @@ angular.module('bullseye.home', [])
                         }
                         return {
                             id: node.id,
-                            label: node.attrs.Name || node.attrs.name || node.attrs.displayName || node.attrs.id,
+                            label: node.attrs.Name || node.attrs.name || node.attrs.actual_name || node.attrs.displayName || node.attrs.id,
                             group: node.group || "unselected"
                         };
                     });
