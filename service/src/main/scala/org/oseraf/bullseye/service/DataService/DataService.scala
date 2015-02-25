@@ -4,7 +4,8 @@ import com.tinkerpop.blueprints.impls.tg.TinkerGraph
 import no.priv.garshol.duke._
 import org.oseraf.bullseye.service.Service
 import org.oseraf.bullseye.store.impl.blueprints.BlueprintsGraphStore
-import org.oseraf.bullseye.store.{Entity, EntityStore, IdentifiedEntity}
+import org.oseraf.bullseye.store._
+
 
 case class BullsEyeEntity(id: String, attrs: Map[String, String] = Map(), edges: Seq[BullsEyeEdge] = Seq()) extends Entity {
   var attributes = attrs
@@ -35,13 +36,31 @@ trait DataService extends Service {
   val merger = new SimpleAddingMerger { override val store = entityStore.spliceStore }
   val splitter = new SimpleAddingSplitter { override val store = entityStore.spliceStore }
   val resolverConf: Configuration = ConfigLoader.load(conf.getConfig("duke").getString("confPath"))
-  val resolver = new DukeResolver(resolutionStore, resolverConf)
+  val resolver = new GraphContextResolver {
+    override val dukeConf = resolverConf
+    override val duke:DukeResolver = new DukeResolver(resolutionStore, resolverConf)
+    override val store = resolutionStore
+  }
+//  val resolver = new DukeResolver(resolutionStore, resolverConf)
+
+  val se = new Evaluator with ScoreEvaluator {
+    override val store = resolutionStore
+  }
+
+  def getComps = ???
+  def getAttributes() = se.getAttributes
+  def distinctValues(col:String) = se.distinctValues(col)
+  def getDukeInfo() = ???
+  def degreeDistribution() = se.degreeDistribution()
+  def numberDupsVsThreshold() = se.numberDupsVsThreshold(resolver.duke)
+  def numberGraphDupsVsThreshold(thresh:Double) = se.numberDupsVsThreshold(resolver, thresh)
+  def numberGraphDupsVsDukeThresholds() = se.numberGraphDupsVsDukeThresholds(resolver)
 
   def resolve(targetEntityId: EntityStore.ID, limit:Option[Int] = None) : Seq[BullsEyeEntityScore] =
-    resolver.resolve(targetEntityId, limit)
+    resolver.resolve(targetEntityId, resolverConf.getThreshold)
 
   def deduplicate(): Seq[BullsEyeDedupeCandidate] =
-    resolver.deduplicate()
+    resolver.deduplicate(resolutionStore, resolverConf.getThreshold)
 
   /**
    * Find entities most similar to the specified query

@@ -1,12 +1,62 @@
 package org.oseraf.bullseye.webapp.api
 
 import com.typesafe.scalalogging.slf4j.Logging
-import org.oseraf.bullseye.service.DataService.{BullsEyeEntity, DataService, PrincipalAwareDataService}
+import org.oseraf.bullseye.service.DataService.{ScoreEvaluator, BullsEyeEntity, DataService, PrincipalAwareDataService}
 import org.json4s.JsonAST.{JArray, JObject, JString}
 import java.security.Principal
 
 trait DataAPI extends API with DataService with PrincipalAwareDataService with Logging {
 
+  get ("/distinctValues/:col") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "distinctValues")
+    distinctValues(params("col"))
+  }
+  get ("/attributes") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "attributes")
+    getAttributes
+  }
+  get ("/dukeInfo") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "dukeInfo")
+    getDukeInfo
+  }
+
+  get("/comps") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "comps")
+    getComps
+  }
+
+  get("/degreeDist") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "degreeDist")
+    degreeDistribution
+  }
+
+  get("/numberGraphDupsVsDukeThresholds") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "numberGraphDupsVsDukeThresholds")
+    val x=  numberGraphDupsVsDukeThresholds
+    x.map{
+      case(i:Int, tbl:Map[Int, Int]) =>
+        (i.toString, tbl.map(p => (p._1.toString, p._2)).toMap)
+    }.toMap
+  }
+  get("/numberGraphDupsVsThreshold/:thresh") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "numberGraphDupsVsThreshold")
+    val x = numberGraphDupsVsThreshold(params("thresh").toDouble)
+    x.map(p => (p._1.toString, p._2)).toMap
+  }
+
+    get("/numberDupsVsThreshold") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "numberDupsVsThreshold")
+    val x = numberDupsVsThreshold()
+    x.map(p => (p._1.toString, p._2)).toMap
+  }
   get("/resolve") {
     val principal = request.getUserPrincipal
     logUser(principal, "resolve")

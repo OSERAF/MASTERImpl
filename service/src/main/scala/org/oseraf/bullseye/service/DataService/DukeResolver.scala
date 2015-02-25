@@ -9,32 +9,46 @@ import org.oseraf.bullseye.service.Service
 import org.oseraf.bullseye.store._
 
 import scala.collection.JavaConversions._
+import scala.util.{Failure, Success, Try}
 
 
-class DukeResolver(
-                    store: EntityStore with EntityIterationPlugin with WriteEventPublisherPlugin,
-                    dukeConf: Configuration
+class DukeResolver (
+                    val store: EntityStore with EntityIterationPlugin with WriteEventPublisherPlugin,
+                    val dukeConf: Configuration
                     )
-  extends Service with Logging with WriteEventListener
+  extends Logging with WriteEventListener with Resolver
 {
 
   val keeperProps = dukeConf.getProperties.map(_.getName)
   logger.info("Indexing graph in Duke, properties: " + keeperProps.mkString(", "))
+  private var indexCount = 0
   val innerDB = {
     val db = new LuceneDatabase()
     db.setConfiguration(dukeConf)
-    store.entities.foreach(eid => db.index(new EntityRecord(eid, store.entity(eid))))
+    store.entities.foreach(eid => {
+      Try {
+        db.index(new EntityRecord(eid, store.entity(eid)))
+      } match {
+        case Success(_) => indexCount += 1
+        case Failure(m) => logger.warn(s"Error indexing $eid: $m")
+      }
+    })
     db.commit()
     db
-  }
-  logger.info("Done indexing initial graph data: " + innerDB.toString)
+  }                                                                                                                                                                      
+  logger.info(s"Done indexing initial graph data, $indexCount resolvable nodes")
 
   // how do we handle updates and deletions?
   store.addListener(this)
-  override def handleAddEntityEvent(id: EntityStore.ID) = {
-    logger.debug("Detected add entity, updating resolver index")
-    innerDB.index(new EntityRecord(id, store.entity(id)))
-    innerDB.commit()
+  override def handleAddEntityEvent(id: EntityStore.ID, entity: Entity) = {
+    logger.trace("Detected add entity, updating resolver index")
+    Try {
+      innerDB.index(new EntityRecord(id, entity))
+      innerDB.commit()
+    } match {
+      case Success(_) => indexCount += 1
+      case Failure(m) => logger.warn(s"Error indexing $id: $m")
+    }
   }
   override def handleAddRelationshipEvent(id: EntityStore.ID) = {}
   override def handleUpdateEntityEvent(id: EntityStore.ID) = {}
@@ -47,40 +61,52 @@ class DukeResolver(
   //   (link from dataset of size 1, with simple comparison))
   val dukeProcessor = new Processor(dukeConf)
 
-  def deduplicate(): Seq[BullsEyeDedupeCandidate] = {
+  override def deduplicate(store:EntityStore with EntityIterationPlugin, thresh:Double): Seq[BullsEyeDedupeCandidate] = {
+    var cnt = -1
     store
       .entities
       .flatMap(entityId => {
-        resolve(entityId)
+        resolve(entityId, thresh)
           .map(dupe =>
             BullsEyeDedupeCandidate(
-              Seq(toBullsEyeEntity(new EntityRecord(entityId, store.entity(entityId))), dupe.entity).toSet,
+              Seq(toBullsEyeEntity(entityId, store), dupe.entity).toSet,
               dupe.score
             )
           )
-    }).toSet.toSeq
+    }).toSet.seq.toSeq
   }
 
-  def resolve(targetEntityId: String, limit: Option[Int] = None): Seq[BullsEyeEntityScore] = {
+  override def resolve(targetEntityId: EntityStore.ID, thresh:Double=0):Seq[BullsEyeEntityScore] = {
     val targetRecord = new EntityRecord(targetEntityId, store.entity(targetEntityId))
     val candidates = innerDB.findCandidateMatches(targetRecord)
-    logger.debug("Resolving targetRecord " + targetEntityId + " among " + candidates.size() + " candidates")
-    candidates.flatMap(candidate => compare(targetRecord, candidate)).toSeq
+    logger.trace("Resolving targetRecord " + targetEntityId + " among " + candidates.size() + " candidates")
+    candidates.flatMap(candidate => {
+        compare(targetRecord, candidate, thresh)
+      }).toSeq
   }
 
-  private def compare(targetRecord: EntityRecord, candidateRecord: Record): Option[BullsEyeEntityScore] = {
+  def compare(targetRecord: EntityRecord, candidateRecord: Record, thresh:Double=0): Option[BullsEyeEntityScore] = {
     if (areEquivalent(targetRecord, candidateRecord)) {
       None
     } else {
       val score = dukeProcessor.compare(targetRecord, candidateRecord)
-      logger.trace("Got comparison score " + score + " for " + candidateRecord.getValue("id"))
-      if (score >= dukeConf.getThreshold) {
-        Some(BullsEyeEntityScore(toBullsEyeEntity(candidateRecord), score))
-      } else {
-        None
+      score >= thresh match {
+        case true => {
+          Some(BullsEyeEntityScore(toBullsEyeEntity(candidateRecord), score))
+        }
+        case false => None
       }
     }
   }
+      //logger.trace("Got comparison score " + score + " for " + candidateRecord.getValue(DukeResolver.ID_ATTRIBUTE))
+//      if (score >= dukeConf.getThreshold) {
+//        Some(BullsEyeEntityScore(toBullsEyeEntity(candidateRecord), score))
+//      } else {
+//        None
+//      }
+//    }
+//  }
+
 
   // Processor.isSameAs, but that's private
   private def areEquivalent(left: Record, right: Record): Boolean =
@@ -90,7 +116,7 @@ class DukeResolver(
         case prop: Property => left.getValues(prop.getName).toSet.intersect(right.getValues(prop.getName).toSet).nonEmpty
       }
 
-  private def toBullsEyeEntity(record: Record): BullsEyeEntity = {
+  def toBullsEyeEntity(record: Record): BullsEyeEntity = {
     val entityId = record.getValue(DukeResolver.ID_ATTRIBUTE)
     new EntityRecord(entityId, store.entity(entityId)).toBullsEyeEntity
   }
