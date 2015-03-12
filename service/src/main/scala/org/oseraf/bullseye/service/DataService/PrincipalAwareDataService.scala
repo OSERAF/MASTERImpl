@@ -11,13 +11,17 @@ trait PrincipalAwareDataService extends DataService {
     val scGraph = super.search(query, searchTypeId, limit)
     filterGraph(p, scGraph)
   }
-  def resolve(p:Principal, targetEntityId: EntityStore.ID, limit:Option[Int]) : Seq[BullsEyeEntityScore] = {
+  def resolve(p:Principal, targetEntityId: EntityStore.ID, limit:Option[Int]) = {
     getBullsEyeEntityDetails(p, targetEntityId) match {
-      case Some(ent) => super.resolve(targetEntityId, limit).filter(scEnt => isOK(p, scEnt.entity))
+      case Some(ent) => super.resolve(targetEntityId, limit).filter(scEnt => isOK(p, entityStore.entity(scEnt._1)))
       case _ => List()
     }
   }
-  def deduplicate(p:Principal):Seq[BullsEyeDedupeCandidate] = super.deduplicate.filter(cand => cand.entities.forall(ent => isOK(p, ent)))
+  def deduplicate(p:Principal) =
+    super.deduplicate()
+      .filter{
+        case(e1, e2, s) =>
+          isOK(p, entityStore.entity(e1)) && isOK(p, entityStore.entity(e2))}
 
   def getNeighborhood(p:Principal, entityId: EntityStore.ID) : BullsEyeGraph = {
     getBullsEyeEntityDetails(p, entityId) match {
@@ -42,7 +46,8 @@ trait PrincipalAwareDataService extends DataService {
   }
   private def filterGraph(p:Principal, g:ScoredBullsEyeGraph) = {
     val scNodes = g.nodes.filter(scEnt => isOK(p, scEnt.entity))
-    val filteredEdgeNodes:Seq[BullsEyeEntityScore] = scNodes.map(node => node.copy(entity=node.entity.copy(edges=filterEdgesFrom(p, node.entity))))
+    val filteredEdgeNodes:Seq[BullsEyeEntityScore] = scNodes.map(node =>
+      new BullsEyeEntityScore(node.entity.copy(edges=filterEdgesFrom(p, node.entity)), node.score))
     val nodeIds = filteredEdgeNodes.map(_.entity.id)
     val edges = g.edges.filter(edge => nodeIds.contains(edge.source) && nodeIds.contains(edge.target))
     ScoredBullsEyeGraph(filteredEdgeNodes, edges)

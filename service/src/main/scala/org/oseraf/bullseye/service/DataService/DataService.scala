@@ -4,18 +4,36 @@ import com.tinkerpop.blueprints.impls.tg.TinkerGraph
 import no.priv.garshol.duke._
 import org.oseraf.bullseye.service.Service
 import org.oseraf.bullseye.store.impl.blueprints.BlueprintsGraphStore
-import org.oseraf.bullseye.store.{Entity, EntityStore, IdentifiedEntity}
+import org.oseraf.bullseye.store._
+
+abstract class BullsEyeScore {
+  def toMap: Map[String, _]
+}
+case class ABullsEyeScore(score:Double) extends BullsEyeScore {
+  override def toMap = Map("score" -> score)
+}
+case class BullsEyePairedScore(scorePair:(Double, Double)) extends BullsEyeScore {
+  override def toMap = Map("rawScore" -> scorePair._1, "improvedScore" -> scorePair._2)
+}
+case class BullsEyeScores(scores:Iterable[Double]) extends BullsEyeScore {
+  override def toMap = Map("scores" -> scores.toString)
+}
 
 case class BullsEyeEntity(id: String, attrs: Map[String, String] = Map(), edges: Seq[BullsEyeEdge] = Seq()) extends Entity {
   var attributes = attrs
 }
-case class BullsEyeEntityScore(entity: BullsEyeEntity, score: Double)
-//source and target are entity ids
+
+class BullsEyeEntityScore(val entity: BullsEyeEntity, val score:BullsEyeScore)
+object BullsEyeEntityScore {
+  def apply(entity:BullsEyeEntity, score:BullsEyeScore) = new BullsEyeEntityScore(entity, score)
+}
+
+case class BullsEyeEntityPairScore(override val entity: BullsEyeEntity, override val score:BullsEyePairedScore) extends BullsEyeEntityScore(entity, score)
 case class BullsEyeEdge(source: String, target: String, attrs: Map[String, String] = Map())
 case class BullsEyeGraph(nodes: Seq[BullsEyeEntity], edges: Seq[BullsEyeEdge])
 case class ScoredBullsEyeGraph(nodes: Seq[BullsEyeEntityScore], edges: Seq[BullsEyeEdge])
 case class BullsEyeSearchType(id: String, name: String)
-case class BullsEyeDedupeCandidate(entities: Iterable[BullsEyeEntity], score: Double)
+case class BullsEyeDedupeCandidate(entities: Iterable[BullsEyeEntity], score:Map[String, _])
 
 trait DataService extends Service {
 
@@ -35,13 +53,22 @@ trait DataService extends Service {
   val merger = new SimpleAddingMerger { override val store = entityStore.spliceStore }
   val splitter = new SimpleAddingSplitter { override val store = entityStore.spliceStore }
   val resolverConf: Configuration = ConfigLoader.load(conf.getConfig("duke").getString("confPath"))
-  val resolver = new DukeResolver(resolutionStore, resolverConf)
+  val gresolver = new GraphContextResolver {
+    override val dukeConf = resolverConf
+    override val duke:DukeResolver = new DukeResolver(resolutionStore, resolverConf)
+    override val store = resolutionStore
+  }
 
-  def resolve(targetEntityId: EntityStore.ID, limit:Option[Int] = None) : Seq[BullsEyeEntityScore] =
-    resolver.resolve(targetEntityId, limit)
+  val re = new ResolverEvaluator {}
 
-  def deduplicate(): Seq[BullsEyeDedupeCandidate] =
-    resolver.deduplicate()
+  def numberDupsVsThreshold = re.numberDupsVsThreshold(gresolver.duke)
+  def numberGraphDupsVsDukeThresholds = re.numberGraphDupsVsDukeThresholds(gresolver)
+
+  def resolve(targetEntityId: EntityStore.ID, limit:Option[Int]=None) : Seq[(EntityStore.ID, gresolver.S)] =
+    gresolver.resolve(targetEntityId)
+
+  def deduplicate(dukeScoreThresh:Option[Double]=None, scoreDiffThresh:Option[Double]=None): Seq[(EntityStore.ID, EntityStore.ID, gresolver.S)] =
+    gresolver.deduplicate()
 
   /**
    * Find entities most similar to the specified query
@@ -61,7 +88,7 @@ trait DataService extends Service {
         val edges = entityStore.neighborhood(identifiedEntity.id).map(relId => entityStore.relationship(relId)).toSeq
         val entity = uic.EntityToBullsEyeEntity(identifiedEntity, edges)
         val connectEdges = entity.edges.filter(edge => connectIds.contains(edge.source) && connectIds.contains(edge.target))
-        (partialScores ++ Seq(BullsEyeEntityScore(entity, score)), partialEdges ++ connectEdges)
+        (partialScores ++ Seq(BullsEyeEntityScore(entity, ABullsEyeScore(score))), partialEdges ++ connectEdges)
     }
     ScoredBullsEyeGraph(entities, edges)
   }
@@ -76,7 +103,7 @@ trait DataService extends Service {
   def merge (entityIds: Seq[EntityStore.ID], mergedEntity:BullsEyeEntity): BullsEyeEntity = {
     val entToMerge = replaceId(mergedEntity, mergeIdentifier.targetId(entityIds, mergedEntity.id))
     merger.merge(entityIds, uic.BullseyeEntityToBlueprintsGraphStore(entToMerge), entToMerge.id)
-    expandEntity(entToMerge.id)
+    uic.EntityToFullBullsEyeEntity(entToMerge.id, entityStore)
   }
 
   /**
@@ -94,7 +121,7 @@ trait DataService extends Service {
     newEntities.foreach(ent => uic.AddBullseyeEntityWithNeighborhood(ent, store))
     // don't trust that the entity hasn't changed
     // split (/splice) may update attributes, for example, so we have to look the entity back up when we expand it
-    splitter.split(entityId, store).map(ent => expandEntity(ent.id))
+    splitter.split(entityId, store).map(ent => uic.EntityToFullBullsEyeEntity(ent.id, entityStore))
   }
 
   private def replaceId(ent: BullsEyeEntity, newId: EntityStore.ID): BullsEyeEntity = {
@@ -142,12 +169,4 @@ trait DataService extends Service {
     entityStore.searchableAttributes.toSeq.map(searchAttr => {
       BullsEyeSearchType(searchAttr._1, searchAttr._2)
     })
-
-  private def expandEntity(entityId: EntityStore.ID): BullsEyeEntity =
-    expandEntity(entityStore.identifiedEntity(entityId))
-
-  private def expandEntity(entity: IdentifiedEntity): BullsEyeEntity = {
-    val relationships = entityStore.neighborhood(entity.id).map(rid => entityStore.relationship(rid))
-    uic.EntityToBullsEyeEntity(entity, relationships.toSeq)
-  }
 }

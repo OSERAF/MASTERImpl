@@ -1,11 +1,29 @@
 package org.oseraf.bullseye.webapp.api
 
 import com.typesafe.scalalogging.slf4j.Logging
-import org.oseraf.bullseye.service.DataService.{BullsEyeEntity, DataService, PrincipalAwareDataService}
+import org.oseraf.bullseye.service.DataService._
 import org.json4s.JsonAST.{JArray, JObject, JString}
 import java.security.Principal
 
 trait DataAPI extends API with DataService with PrincipalAwareDataService with Logging {
+
+  get("/numberGraphDupsVsDukeThresholds") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "numberGraphDupsVsDukeThresholds")
+    numberGraphDupsVsDukeThresholds
+      .map{
+        case(i, tbl) =>
+          (i.toString, tbl.map(p => (p._1.toString, p._2)).toMap)
+    }.toMap
+  }
+
+  get("/numberDupsVsThreshold") {
+    val principal = request.getUserPrincipal
+    logUser(principal, "numberDupsVsThreshold")
+    numberDupsVsThreshold
+      .map{
+        case (thresh, count) =>
+          (thresh.toString, count)}.toMap}
 
   get("/resolve") {
     val principal = request.getUserPrincipal
@@ -16,7 +34,7 @@ trait DataAPI extends API with DataService with PrincipalAwareDataService with L
   get("/deduplicate") {
     val principal = request.getUserPrincipal
     logUser(principal, "deduplicate")
-    deduplicate(principal)
+    deduplicate()
   }
 
   get("/search") {

@@ -454,6 +454,8 @@ angular.module('bullseye.home', [])
             });
             splitModal.result.then(function (splits) {
                 EntityOps.split({eId: d.entity.id, entities: splits}).$promise.then(function (resultSplits) {
+                    console.log(resultSplits);
+//                    resultSplits = _.map(resultSplits, function)
                     DataService.split(d.entity.id, resultSplits);
                 });
             });
@@ -540,6 +542,10 @@ angular.module('bullseye.home', [])
             },
             search: function (query, searchType, cbEarly, cbLate) {
                 return EntityOps.search({query: query, searchTypeId: searchType.id}).$promise.then(function (graph) {
+                           graph.nodes = _.map(graph.nodes, function(node) {
+                                             node.entity.label = node.entity.attrs.Name || node.entity.attrs.name || node.entity.attrs.actual_name || node.entity.attrs.displayName || node.entity.attrs.title || node.entity.attrs.id;
+                                             return node;
+                                         });
                     cbEarly && cbEarly();
                     entityData = graph.nodes.map(function (d) {
                         d.entity.label = UtilService.formatDisplayName(d.entity);

@@ -17,7 +17,7 @@ trait BullseyeEntityStore
 {
   def setup(conf: Config)
   def spliceStore: EntityStore with SplicePlugin
-  def resolutionStore: EntityStore with EntityIterationPlugin with WriteEventPublisherPlugin
+  def resolutionStore: EntityStore with EntityIterationPlugin with WriteEventPublisherPlugin with NeighborhoodPlugin
   def mergeIdentifier: SimpleAddingMergerIdentifier
   def splitIdentifier: SimpleAddingSplitterIdentifier
 }
@@ -53,6 +53,7 @@ class BlueprintsBullseyeEntityStore
   def updateEntity(id: EntityStore.ID, entity: Entity) = innerStore.updateEntity(id, entity)
   def updateRelationship(id: EntityStore.ID, relationship: Relationship) = innerStore.updateRelationship(id, relationship)
   def neighborhood(entityId: EntityStore.ID) = innerStore.neighborhood(entityId)
+  def entities = innerStore.entities
   
   val store: EntityStore = innerStore
 }
