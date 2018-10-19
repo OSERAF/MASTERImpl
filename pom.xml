@@ -23,7 +23,7 @@
         <joda-time.version>2.1</joda-time.version>
         <joda-convert.version>1.2</joda-convert.version>
         <slf4j.version>1.7.2</slf4j.version>
-        <jetty.version>8.1.15.v20140411</jetty.version>
+        <jetty.version>9.2.25.v20180606</jetty.version>
         <typesafe.config.version>1.2.1</typesafe.config.version>
         <typesafe.scalalogging.version>1.1.0</typesafe.scalalogging.version>
         <json4s.version>3.2.6</json4s.version>
